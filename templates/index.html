@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sympcare — Modern Chat UI</title>
+<style>
+  :root{
+    --bg:#0d0d0d; --panel:#0f1115; --muted:#9aa4b2; --accent:#4da6ff; --glass:rgba(255,255,255,0.03);
+    --bubble-user:#111827; --bubble-bot:#0b1220; --text:#e6eef8; --radius:14px;
+  }
+  [data-theme="light"]{
+    --bg:#f4f6f9; --panel:#fff; --muted:#556; --accent:#0b84ff; --glass:rgba(0,0,0,0.03);
+    --bubble-user:#dfe8ff; --bubble-bot:#f1f5f9; --text:#0b1220;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0; font-family:Inter, "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial; background:var(--bg); color:var(--text); -webkit-font-smoothing:antialiased}
+  .app {
+    display:grid;
+    grid-template-columns: 260px 1fr 320px;
+    gap:16px;
+    height:100vh;
+    padding:18px;
+  }
+
+  /* Sidebar (left) */
+  .sidebar{
+    position:fixed;
+    left:18px; top:18px; bottom:18px;
+    width:260px;
+    background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    border-radius:12px;
+    padding:14px;
+    border:1px solid rgba(255,255,255,0.04);
+    display:flex; flex-direction:column; gap:12px;
+    backdrop-filter: blur(6px);
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700}
+  .brand .logo{width:36px;height:36px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#000}
+  .modes{display:flex; flex-direction:column; gap:8px; margin-top:6px}
+  .mode-btn{
+    display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; cursor:pointer;
+    border:1px solid rgba(255,255,255,0.03); background:var(--panel); color:var(--text); font-weight:600;
+  }
+  .mode-btn.active{background:var(--accent); color:#000}
+  .controls{margin-top:auto; display:flex; gap:8px; align-items:center}
+  .icon-btn{padding:8px;border-radius:8px;background:var(--panel); border:1px solid rgba(255,255,255,0.03); cursor:pointer}
+  .theme-toggle{display:flex; align-items:center; gap:8px; padding:8px; border-radius:8px; cursor:pointer}
+
+  /* Center column */
+  .center {
+    margin-left: 296px; margin-right: 336px; /* account for fixed sidebar + right history area */
+    display:flex; flex-direction:column; height:100vh;
+  }
+
+  .topbar{
+    height:66px; display:flex; align-items:center; justify-content:center; border-bottom:1px solid rgba(255,255,255,0.03);
+    font-weight:600; color:var(--muted);
+  }
+
+  .welcome{
+    flex:1; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:18px;
+  }
+  .welcome h1{font-size:32px; margin:0; color:var(--text)}
+  .welcome p{color:var(--muted); margin:0}
+
+  .chat-panel{
+    flex:1; display:flex; flex-direction:column; gap:12px; padding:18px; overflow:hidden;
+  }
+
+  .messages{
+    flex:1; overflow:auto; padding:8px; display:flex; flex-direction:column; gap:10px;
+    scroll-behavior:smooth;
+  }
+
+  .msg{
+    max-width:72%; padding:12px 14px; border-radius:12px; opacity:0; transform:translateY(6px);
+    animation: fadeInUp 220ms ease forwards;
+    line-height:1.45; font-size:15px;
+  }
+  @keyframes fadeInUp{ to{opacity:1; transform:none} }
+
+  .msg.bot{ background:var(--bubble-bot); align-self:flex-start; border-left:4px solid var(--accent) }
+  .msg.user{ background:var(--bubble-user); align-self:flex-end }
+
+  .input-area{
+    display:flex; align-items:center; gap:12px; padding:16px; border-top:1px solid rgba(255,255,255,0.03); background:linear-gradient(180deg, transparent, rgba(255,255,255,0.01));
+  }
+
+  .input-outer{
+    flex:1; display:flex; align-items:center; background:var(--panel); border-radius:999px; padding:10px 12px; gap:10px; border:1px solid rgba(255,255,255,0.03);
+  }
+
+  .input-outer input{
+    border:none; outline:none; background:transparent; color:var(--text); font-size:15px; flex:1;
+  }
+
+  .btn-send{
+    background:var(--accent); border:none; padding:10px 12px; border-radius:999px; cursor:pointer; color:#000; font-weight:700;
+  }
+
+  /* Typing indicator */
+  .typing {
+    display:inline-flex; gap:6px; align-items:center;
+  }
+  .dot{
+    width:8px; height:8px; border-radius:50%; background:var(--muted); opacity:0.9;
+    animation: blink 1s infinite;
+  }
+  .dot:nth-child(2){ animation-delay:.12s }
+  .dot:nth-child(3){ animation-delay:.24s }
+  @keyframes blink{ 0%{transform:translateY(0);opacity:.2} 50%{transform:translateY(-4px);opacity:1} 100%{transform:translateY(0);opacity:.2} }
+
+  /* Right history panel */
+  .history {
+    position:fixed; right:18px; top:18px; bottom:18px; width:320px; background:var(--panel); border-radius:12px; padding:12px; border:1px solid rgba(255,255,255,0.03); overflow:auto;
+  }
+  .history h3{margin:0 0 8px 0; color:var(--muted); font-size:14px}
+  .conv-list{display:flex; flex-direction:column; gap:8px}
+  .conv-item{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:10px; background:transparent; border-radius:8px; cursor:pointer; border:1px solid transparent}
+  .conv-item:hover{background:rgba(255,255,255,0.01)}
+  .conv-title{font-weight:600; font-size:13px; color:var(--text)}
+  .conv-meta{font-size:12px; color:var(--muted)}
+
+  /* small helpers */
+  .small{font-size:13px;color:var(--muted)}
+  .row{display:flex;align-items:center;gap:8px}
+  .muted{color:var(--muted)}
+  .hidden{display:none}
+  .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,0.03);padding:8px;border-radius:8px;cursor:pointer;color:var(--muted)}
+  .btn-danger{background:transparent;border:1px solid rgba(255,0,0,0.15);padding:8px;border-radius:8px;cursor:pointer;color:salmon}
+</style>
+</head>
+<body>
+
+<!-- Left Sidebar (fixed) -->
+<div class="sidebar" role="navigation" aria-label="Mode sidebar">
+  <div class="brand">
+    <div class="logo">SC</div>
+    <div>
+      <div style="font-size:14px">Sympcare</div>
+      <div class="small muted">AI Health Assistant</div>
+    </div>
+  </div>
+
+  <div style="margin-top:8px; color:var(--muted); font-size:13px">Choose mode</div>
+  <div class="modes" role="list">
+    <button class="mode-btn active" data-endpoint="/drug_disease/chat" id="mode-info" role="listitem">🧠 Drug & Disease</button>
+    <button class="mode-btn" data-endpoint="/drug_interaction/chat" id="mode-interaction" role="listitem">💊 Drug Interaction</button>
+
+  </div>
+
+  <div style="height:8px"></div>
+
+  <div class="controls">
+    <button title="Clear current chat" id="clearChat" class="icon-btn" aria-label="Clear chat">🗑</button>
+    <button title="New conversation" id="newConv" class="icon-btn" aria-label="New conversation">➕</button>
+    <button title="Microphone (hold to speak or click to toggle)" id="micBtn" class="icon-btn" aria-label="Voice input">🎤</button>
+    <div style="flex:1"></div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
+    <label class="theme-toggle" id="themeToggle" title="Toggle theme" role="button" aria-pressed="false">
+      <input id="themeCheckbox" type="checkbox" style="display:none">
+      <span style="font-size:13px">🌙 / ☀️</span>
+      <span class="small muted">Theme</span>
+    </label>
+
+    <button id="saveConvBtn" class="btn-ghost" title="Save conversation">Save Conversation</button>
+    <button id="deleteAllBtn" class="btn-danger" title="Delete all saved convos">Delete All Conversations</button>
+  </div>
+</div>
+
+<!-- Main app (center) -->
+<div class="center" role="main">
+  <div class="topbar">Sympcare Chat</div>
+
+  <div class="chat-panel">
+    <div id="welcome" class="welcome">
+      <h1>Where should we begin?</h1>
+      <p class="muted">Select a mode from the left and ask anything — medical, drug interactions.</p>
+      <div class="small muted">Tip: Hold the mic button and speak to input voice.</div>
+    </div>
+
+    <div id="chatArea" class="messages hidden" aria-live="polite" aria-atomic="false"></div>
+
+    <div class="input-area">
+      <div class="input-outer" role="region" aria-label="Message input">
+        <input id="userInput" placeholder="Ask anything..." autocomplete="off" />
+        <div id="typingIndicator" class="muted hidden">
+          <div class="typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+        </div>
+      </div>
+      <button id="sendBtn" class="btn-send" aria-label="Send message">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- Right history / conversations -->
+<div class="history" role="complementary" aria-label="Conversation history">
+  <h3>Conversations</h3>
+  <div id="convList" class="conv-list"></div>
+  <div style="height:12px"></div>
+  <div class="small muted">Click a conversation to restore it. Use Save to store current chat.</div>
+</div>
+
+<script>
+/* -------------------------
+   Basic state & elements
+   ------------------------- */
+const modes = document.querySelectorAll('.mode-btn'); // NOW ONLY 2 MODES IN HTML
+const chatArea = document.getElementById('chatArea');
+const welcome = document.getElementById('welcome');
+const sendBtn = document.getElementById('sendBtn');
+const userInput = document.getElementById('userInput');
+const typingIndicator = document.getElementById('typingIndicator');
+const micBtn = document.getElementById('micBtn');
+const themeCheckbox = document.getElementById('themeCheckbox');
+const convList = document.getElementById('convList');
+const saveConvBtn = document.getElementById('saveConvBtn');
+const clearChatBtn = document.getElementById('clearChat');
+const newConvBtn = document.getElementById('newConv');
+const deleteAllBtn = document.getElementById('deleteAllBtn');
+
+let currentEndpoint = '/drug_disease/chat';
+let recognition = null;
+let isListening = false;
+let currentConversation = { id: Date.now(), name: 'New conversation', messages: [] };
+
+/* -------------------------
+   THEME TOGGLE (FIXED)
+   ------------------------- */
+function applyTheme(theme){
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("sympcare_theme", theme);
+  themeCheckbox.checked = (theme === "light");
+}
+applyTheme(localStorage.getItem("sympcare_theme") || "dark");
+
+themeCheckbox.addEventListener("change", () => {
+  applyTheme(themeCheckbox.checked ? "light" : "dark");
+});
+
+/* -------------------------
+   MODE SWITCHING (ONLY 2 MODES)
+   ------------------------- */
+modes.forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    modes.forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+
+    // Update endpoint
+    currentEndpoint = btn.dataset.endpoint;
+
+    appendBot(`🔄 Switched to: ${btn.textContent}`);
+  });
+});
+
+/* -------------------------
+   MICROPHONE (FIXED)
+   ------------------------- */
+if("webkitSpeechRecognition" in window){
+  const SR = window.webkitSpeechRecognition;
+  recognition = new SR();
+  recognition.lang = "en-US";
+  recognition.interimResults = false;
+  recognition.continuous = false;
+
+  recognition.onstart = ()=>{
+    isListening = true;
+    micBtn.textContent = "🎙️";
+  };
+
+  recognition.onend = ()=>{
+    isListening = false;
+    micBtn.textContent = "🎤";
+  };
+
+  recognition.onresult = (event)=>{
+    userInput.value = event.results[0][0].transcript;
+  };
+
+  micBtn.onclick = ()=>{
+    if(!isListening) recognition.start();
+    else recognition.stop();
+  };
+
+} else {
+  micBtn.style.opacity = ".4";
+  micBtn.title = "Voice not supported";
+}
+
+/* -------------------------
+   CHAT RENDERING
+   ------------------------- */
+function appendUser(text){
+  ensureChatVisible();
+  const d = document.createElement("div");
+  d.className = "msg user";
+  d.textContent = text;
+  chatArea.appendChild(d);
+  currentConversation.messages.push({role:"user", text});
+  chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function appendBot(html){
+  ensureChatVisible();
+  const d = document.createElement("div");
+  d.className = "msg bot";
+  d.innerHTML = html;
+  chatArea.appendChild(d);
+  currentConversation.messages.push({role:"bot", text: html});
+  chatArea.scrollTop = chatArea.scrollHeight;
+  return d;
+}
+
+function ensureChatVisible(){
+  welcome.classList.add("hidden");
+  chatArea.classList.remove("hidden");
+}
+
+/* -------------------------
+   LOCAL STORAGE (HISTORY)
+   ------------------------- */
+function loadConversations(){
+  return JSON.parse(localStorage.getItem("sympcare_convs") || "[]" );
+}
+function saveConversations(list){
+  localStorage.setItem("sympcare_convs", JSON.stringify(list));
+}
+
+function renderConvList(){
+  convList.innerHTML = "";
+  const list = loadConversations().slice().reverse();
+
+  if(list.length === 0){
+    convList.innerHTML = `<div class="small muted">No saved conversations yet</div>`;
+    return;
+  }
+
+  list.forEach(conv=>{
+    const li = document.createElement("div");
+    li.className = "conv-item";
+
+    li.innerHTML = `
+      <div>
+        <div class="conv-title">${conv.name}</div>
+        <div class="conv-meta">${new Date(conv.id).toLocaleString()}</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn-ghost">Load</button>
+        <button class="btn-danger">Del</button>
+      </div>
+    `;
+
+    convList.appendChild(li);
+
+    li.querySelector(".btn-ghost").onclick = ()=>{
+      currentConversation = JSON.parse(JSON.stringify(conv));
+      restoreConversation();
+    };
+
+    li.querySelector(".btn-danger").onclick = ()=>{
+      saveConversations(loadConversations().filter(c=>c.id!==conv.id));
+      renderConvList();
+    };
+  });
+}
+renderConvList();
+
+/* Save conv */
+saveConvBtn.onclick = ()=>{
+  const list = loadConversations();
+  currentConversation.id = Date.now();
+  currentConversation.name = prompt("Conversation Name", currentConversation.name) || currentConversation.name;
+  list.push(currentConversation);
+  saveConversations(list);
+  renderConvList();
+};
+
+/* -------------------------
+   RESTORE Conversation
+   ------------------------- */
+function restoreConversation(){
+  chatArea.innerHTML = "";
+  ensureChatVisible();
+
+  currentConversation.messages.forEach(m=>{
+    const d = document.createElement("div");
+    d.className = "msg " + (m.role==="user" ? "user" : "bot");
+    d.innerHTML = m.text;
+    chatArea.appendChild(d);
+  });
+
+  chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+/* -------------------------
+   CLEAR / NEW CHAT
+   ------------------------- */
+clearChatBtn.onclick = ()=>{
+  if(!confirm("Clear chat?")) return;
+  chatArea.innerHTML = "";
+  chatArea.classList.add("hidden");
+  welcome.classList.remove("hidden");
+  currentConversation = { id: Date.now(), name:"New conversation", messages:[] };
+};
+
+newConvBtn.onclick = clearChatBtn.onclick;
+
+deleteAllBtn.onclick = ()=>{
+  if(!confirm("Delete all saved conversations?")) return;
+  saveConversations([]);
+  renderConvList();
+};
+
+/* -------------------------
+   SEND MESSAGE (STREAM)
+   ------------------------- */
+async function sendMessage(){
+  const text = userInput.value.trim();
+  if(!text) return;
+
+  appendUser(text);
+  userInput.value = "";
+  typingIndicator.classList.remove("hidden");
+
+  const botMsg = appendBot("…");
+
+  try{
+    const res = await fetch(currentEndpoint,{
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ message:text })
+    });
+
+    if(!res.ok){
+      botMsg.innerHTML = "❌ Server error";
+      typingIndicator.classList.add("hidden");
+      return;
+    }
+
+    if(res.body){
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let full = "";
+
+      while(true){
+        const { value, done } = await reader.read();
+        if(done) break;
+        full += decoder.decode(value);
+        botMsg.innerHTML = full.replace(/\n/g,"<br>");
+        chatArea.scrollTop = chatArea.scrollHeight;
+      }
+    }
+
+    typingIndicator.classList.add("hidden");
+
+  } catch(err){
+    botMsg.innerHTML = "❌ Error contacting server.";
+    typingIndicator.classList.add("hidden");
+  }
+}
+
+/* Send */
+sendBtn.onclick = sendMessage;
+userInput.onkeypress = e=>{ if(e.key==="Enter") sendMessage(); };
+
+document.querySelector(".center").onclick = ()=> userInput.focus();
+</script>
+
+</body>
+</html>
