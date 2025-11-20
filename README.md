@@ -187,11 +187,4 @@ Acknowledgements & references
 - FAISS (Facebook AI Similarity Search)
 - Flask
 
-License
--------
-Please add a LICENSE file to your repository if you intend to publish this code.
 
-If you want, I can also:
-- generate a requirements.txt for the project,
-- produce a Dockerfile to containerize the app,
-- or create a simple `templates/index.html` example UI to test the streaming endpoints.
