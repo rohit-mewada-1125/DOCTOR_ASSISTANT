@@ -187,4 +187,3 @@ Acknowledgements & references
 - FAISS (Facebook AI Similarity Search)
 - Flask
 
-
